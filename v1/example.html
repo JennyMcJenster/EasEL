@@ -1,0 +1,32 @@
+<!doctype html>
+
+<html>
+<head>
+	<title>EasEL Example - Basic Interactive Canvas</title>
+	<script type="text/javascript" src="./asset/script/jquery-3.3.1.min.js"></script>
+	<script type="text/javascript" src="./asset/script/easel.js"></script>
+	<style type="text/css">
+		canvas {
+			border: 1px solid #ccc;
+		}
+	</style>
+</head>
+<body>
+	<canvas id="nameOfCanvas" width="640" height="480"></canvas>
+	<script type="text/javascript">
+		var easel = new Easel(document.getElementById("nameOfCanvas"));
+		/*var zoneTemplate_style = new EaselZone("stylezone", {
+			style: {backgroundColor: "#e88", borderColor: ["#0c0","#0c0"]},
+			x: 0.1, y: 0.1, w: 0.3, h: 0.1
+		});
+		var zoneTemplate_event = new EaselZone("eventzone", {
+			onclick: (e)=>{ console.log(e.data.name); },
+			data: {name: "Template Zone"}
+		});
+		var zoneChild_a = new EaselZone("childzone_alpha", zoneTemplate_style, zoneTemplate_event, {data:{name:"Child Alpha"}});
+		var zoneChild_b = new EaselZone("childzone_beta", "childzone_alpha");
+		zoneChild_b.properties({y:0.25, w:0.4, style:{backgroundColor:"#8ae"}, data:{name:"Child Beta"}});
+		easel.componentAdd(zoneChild_a, zoneChild_b);*/
+	</script>
+</body>
+</html>
