@@ -4,11 +4,11 @@
 var UTIL = {
 	__DEBUGLEVEL: 0,
 	DEBUGMODE: {WARN:0b1, ERR:0b10, INFO:0b100, PERF:0b1000, DEV:0b10000},
-	DEBUG_GET: function (level) { return (__DEBUGLEVEL&level != 0); },
-	DEBUG_SET: function (level) { __DEBUGLEVEL = level; },
-	DEBUG_ON: function (level) { __DEBUGLEVEL = __DEBUGLEVEL|level; },
-	DEBUG_OFF: function (level) { __DEBUGLEVEL = (__DEBUGLEVEL|level)^level; },
-	LOG: function (level, print, spew) { if(((__DEBUGLEVEL&level)!=0) && typeof print!=="undefined") console.log(print); return (UTIL.DEF(spew) ? spew : true); },
+	DEBUG_GET: function (level) { return UTIL.DEF(level) ? (UTIL.__DEBUGLEVEL&level != 0) : UTIL.__DEBUGLEVEL; },
+	DEBUG_SET: function (level) { UTIL.__DEBUGLEVEL = level; },
+	DEBUG_ON: function (level) { UTIL.__DEBUGLEVEL = UTIL.__DEBUGLEVEL|level; },
+	DEBUG_OFF: function (level) { UTIL.__DEBUGLEVEL = (UTIL.__DEBUGLEVEL|level)^level; },
+	LOG: function (level, print, spew) { if(((UTIL.__DEBUGLEVEL&level)!=0) && typeof print!=="undefined") for(var l in UTIL.DEBUGMODE) if(UTIL.DEBUGMODE[l]==level) { console.log("["+l+"]", print); var printed=true; break; }; if(UTIL.UNDEF(printed)) console.log(print); return (UTIL.DEF(spew) ? spew : true); },
 	LOG_WARN: function (print, spew) { return UTIL.LOG(UTIL.DEBUGMODE.WARN, print, spew); },
 	LOG_ERR: function (print, spew) { return UTIL.LOG(UTIL.DEBUGMODE.ERR, print, spew); },
 	LOG_INFO: function (print, spew) { return UTIL.LOG(UTIL.DEBUGMODE.INFO, print, spew); },
@@ -41,7 +41,7 @@ var UTIL = {
 	STRINGIFY: function (object) { if(!UTIL.ISOBJ(object)) return String(object); let string = "{"; for(var k in object) string += (string.length==1?"":",") + (UTIL.ISOBJ(object[k]) ? UTIL.STRINGIFY(object[k]) : ("\""+ k +"\":"+ (UTIL.ISSTR(object[k])?"\""+object[k]+"\"":String(object[k])))); return string + "}"; }
 };
 
-UTIL.DEBUG_SET (UTIL.DEBUGMODE.WARN + UTIL.DEBUGMODE.ERR + UTIL.DEBUGMODE.INFO + UTIL.DEBUGMODE.PERF + UTIL.DEBUGMODE.DEV);
+UTIL.DEBUG_SET (UTIL.DEBUGMODE.WARN | UTIL.DEBUGMODE.ERR | UTIL.DEBUGMODE.INFO | UTIL.DEBUGMODE.PERF | UTIL.DEBUGMODE.DEV);
 
 
 
@@ -56,13 +56,16 @@ var LANG = {
 	_FormatToken: function (token) { return token.toUpperCase(); },
 	_Interpret: function (detokenised, inputTokens) {
 		var interpreted = detokenised.parts[0];
-		if(!UTIL.ISARR(detokenised.inserts)) return interpreted;
+		if(!UTIL.ISARR(detokenised.inserts))
+			return interpreted;
 		var inputs = [];
-		for(var t in inputTokens)
-			inputs[t.toUpperCase()] = inputTokens[t];
+		if(UTIL.ISDICT(inputTokens))
+			for(var t in inputTokens)
+				inputs[LANG._FormatToken(t)] = inputTokens[t];
 		for(var i=0; i<detokenised.inserts.length; ++i) {
 			var token = detokenised.tokens[detokenised.inserts[i]];
-			var inserting = inputs[token];
+			var insert = inputs[token];
+			var inserting = UTIL.DEF(insert) ? insert : (LANG.TOKENPREFIX+token+LANG.TOKENSUFFIX);
 			interpreted += inserting + detokenised.parts[i+1];
 		}
 		return interpreted;
@@ -78,12 +81,13 @@ var LANG = {
 		var tokenPrefixAt = remainingString.indexOf(TOKENPRE); var tokenPrefixLen = TOKENPRE.length;
 		var tokenSuffixAt = remainingString.indexOf(TOKENSUF); var tokenSuffixLen = TOKENSUF.length;
 		while(tokenPrefixAt >= 0 && tokenSuffixAt >= 0){
-			if(UTIL.UNDEF(detokenised.inserts)) detokenised.inserts = new Array();
-			if(detokenised.parts.length-1<detokenised.inserts.length) detokenised.parts[detokenised.inserts.length] = "";
-			UTIL.LOG_DEV("[R] "+remainingString);
-			if(tokenSuffixAt >= 0 && tokenSuffixAt < tokenPrefixAt) { // Check for token suffix before prefix
+			if(UTIL.UNDEF(detokenised.inserts))
+				detokenised.inserts = new Array();
+			if(detokenised.parts.length-1<detokenised.inserts.length)
+				detokenised.parts[detokenised.inserts.length] = "";
+			if(tokenSuffixAt >= 0 && tokenSuffixAt < tokenPrefixAt) {
+				// Check for token suffix before prefix
 				var append = remainingString.substr(0, tokenSuffixAt + tokenSuffixLen);
-				UTIL.LOG_DEV("[A] "+append);
 				detokenised.parts[detokenised.inserts.length] += append;
 				remainingString = remainingString.substr(tokenSuffixAt + tokenSuffixLen);
 				tokenPrefixAt = remainingString.indexOf(TOKENPRE);
@@ -93,9 +97,8 @@ var LANG = {
 			var tokenStart = tokenPrefixAt + tokenPrefixLen;
 			var beforeToken = remainingString.substr(0, tokenPrefixAt);
 			var insideToken = remainingString.substr(tokenPrefixAt+tokenPrefixLen, tokenSuffixAt-tokenPrefixAt-tokenPrefixLen);
-			UTIL.LOG_DEV("[B] "+beforeToken);
-			UTIL.LOG_DEV("[T] "+insideToken);
-			if(UTIL.UNDEF(detokenised.tokens)) detokenised.tokens = new Array();
+			if(UTIL.UNDEF(detokenised.tokens))
+				detokenised.tokens = new Array();
 			var tokenName = LANG._FormatToken(insideToken);
 			var tokenIndex = detokenised.tokens.indexOf(tokenName);
 			if(tokenIndex < 0) {
@@ -110,23 +113,15 @@ var LANG = {
 			tokenSuffixAt = remainingString.indexOf(TOKENSUF);
 		}
 		detokenised.parts.push(remainingString);
-		UTIL.LOG_DEV("[F] "+remainingString);
-		UTIL.LOG_DEV(detokenised);
 		return detokenised;
 	},
-	_LangError: function (id, tokensExpect, tokensGiven) {
-		var error = "##LANG_ERROR##";
-		if(!UTIL.ISSTR(id)) return error;
-		error += "ID:"+ id +"##";
-		if(UTIL.ISDICT(tokensExpect))
-			error += "EXPECT:[\""+ tokensExpect.join("\",\"") +"\"]##";
-		if(UTIL.ISDICT(tokensGiven)) {
-			var tokenPrint = "";
-			if(Object.keys(tokensGiven).length > 0)
-				for(var tokenID in tokensGiven)
-					tokenPrint += (tokenPrint.length==0?"":",") +"\""+ tokenID +"\":"+ (UTIL.ISSTR(tokensGiven[tokenID])?"\""+tokensGiven[tokenID]+"\"":"NonString");
-			error += "GOT:{"+ tokenPrint +"}##";
-		}
+	_LangError: function (id, inputTokens) {
+		var error = "## LANG_ERROR ##";
+		if(!UTIL.ISSTR(id))
+			return error;
+		error += " "+ id +" ##";
+		if(UTIL.ISDICT(inputTokens))
+			error += " "+ UTIL.STRINGIFY(inputTokens) +" ##";
 		return error;
 	},
 	Dictionary: function () { return Object.keys(LANG.DICTIONARY); },
@@ -139,41 +134,44 @@ var LANG = {
 		if(!UTIL.ISSTR(string))
 			return UTIL.LOG_ERR("LANG.Put failed; Passed a non-string as a parameter", false);
 		LANG.DICTIONARY[id] = LANG._Detokenise(string);
-		return UTIL.LOG_INFO("Registered new language string, ID \""+ id +"\" ("+ LANG.DICTIONARY[id].tokenCount +" tokens"+ (UTIL.SIZE(LANG.DICTIONARY[id].tokens)>0 ? (": \""+ LANG.DICTIONARY[id].tokens.join("\", \"") +"\"") : "") +")");
+		var tokenCount = LANG.DICTIONARY[id].tokenCount;
+		return UTIL.LOG_INFO("Registered new language string, ID \""+ id +"\" ("+ tokenCount +" tokens"+ (tokenCount>0 ? (": \""+ LANG.DICTIONARY[id].tokens.join("\", \"") +"\"") : "") +")");
 	},
 	Get: function (id, tokens) {
 		if(!UTIL.ISSTR(id))
-			return UTIL.LOG_ERR("ID should be a string", LANG._LangError());
+			return UTIL.LOG_ERR("ID should be a string", LANG._LangError(id));
 		var id = LANG._FormatID(id);
-		if(!UTIL.ISDICT(tokens)){
-			if(LANG.DICTIONARY[id].tokenCount==0){
+		if(!UTIL.INOBJ(id, LANG.DICTIONARY))
+			return UTIL.LOG_ERR("Dictionary does not contain ID \""+ id +"\"", LANG._LangError(id, tokens));
+		var dictionaryEntry = LANG.DICTIONARY[id];
+		if(!UTIL.ISDICT(tokens)) {
+			if(LANG.DICTIONARY[id].tokenCount==0) {
 				if(UTIL.DEF(tokens))
 					UTIL.LOG_WARN("ID \""+ id +"\" expected no tokens");
 				return LANG.DICTIONARY[id].parts[0];
 			} else
-				return UTIL.LOG_ERR("ID \""+ id +"\" expected tokens as dictionary of IDs and values", LANG._LangError(id));
+				return UTIL.LOG_ERR("ID \""+ id +"\" expected tokens as dictionary of IDs and values", LANG._Interpret(dictionaryEntry));
 		}
-		if(!UTIL.INOBJ(id, LANG.DICTIONARY))
-			return UTIL.LOG_ERR("Dictionary does not contain ID \""+ id +"\"", LANG._LangError(id, null, tokens));
-		var dictionaryEntry = LANG.DICTIONARY[id];
 		var tokensPassed = UTIL.SIZE(tokens);
 		var tokensExpect = dictionaryEntry.tokenCount;
 		if(tokensPassed != tokensExpect)
-			return UTIL.LOG_ERR("ID \""+ id +"\" expected "+ tokensExpect +" tokens, got "+ tokensPassed, LANG._LangError(id, dictionaryEntry.tokens, tokens));
+			return UTIL.LOG_ERR("ID \""+ id +"\" expected "+ tokensExpect +" tokens, got "+ tokensPassed, LANG._Interpret(dictionaryEntry, tokens));
 		for(var tokenID in tokens)
 			if(!UTIL.INARR(LANG._FormatToken(tokenID), dictionaryEntry.tokens))
-				return UTIL.LOG_ERR("No such token \""+ LANG._FormatToken(tokenID) +"\" in ID \""+ id +"\"", LANG._LangError(id, dictionaryEntry.tokens, tokens));
+				return UTIL.LOG_ERR("No such token \""+ LANG._FormatToken(tokenID) +"\" in ID \""+ id +"\"", LANG._Interpret(dictionaryEntry, tokens));
 		return LANG._Interpret(dictionaryEntry, tokens);
 	}
 };
 
-LANG.Put("teststr_0", "Test String");
-LANG.Put("teststr_1", "Test String; Parameters:[param:\"{{param}}\"]");
-LANG.Put("teststr_2", "Test String; Parameters:[param1:\"{{param1}}\",param2:\"{{param2}}\"]");
-
-if(UTIL.DEBUG_GET(UTIL.DEBUGMODE.DEV)) {
+if(false && UTIL.DEBUG_GET(UTIL.DEBUGMODE.DEV)) {
+	LANG.Put("teststr_0", "Test 0");
+	LANG.Put("teststr_1", "Test 1  |  p={{param}}");
+	LANG.Put("teststr_2", "Test 2  |  1={{paramA}}  2={{paramB}}");
+	LANG.Put("teststr_3", "Test 3  |  p={{param}}  p={{param}}");
+	LANG.Put("teststr_4", "Test 4  |  p={{param}}  1={{paramA}}  p={{param}}  2={{paramB}}");
 	var dict = LANG.Dictionary();
-	var tests = [null, {}, {param:null}, {param:"test"}, {param1:null,param:null}, {param1:"testA",param2:null}, {pArAm1:"testA",Param2:"testB"}];
+	dict.push("asdf");
+	var tests = [null, {}, {param:null}, {param:"PP"}, {parama:null,param:null}, {ParamA:"AA",param2:null}, {paramA:"AA",Paramb:"BB"}, {param:"PP", pArAmA:"AA",paramB:"BB"}];
 	for(var k=0; k<dict.length; ++k)
 		for(var t=0; t<tests.length; ++t) {
 			var testID = (k+1) +":"+ (t+1);
@@ -201,6 +199,7 @@ var LOG_DEV = UTIL.LOG_DEV;
 const __EASEL_NICEBROWSER = (window.addEventListener !== undefined);
 var EASEL_OVERRIDE_WINDOW = EASEL_OVERRIDE_WINDOW===undefined ? true : EASEL_OVERRIDE_WINDOW;
 var __EASEL_KBFOCUS = null;
+var __EASEL_KBFOCUS_CHANGED = false;
 
 // Perform actions based on window state etc.
 if(!__EASEL_NICEBROWSER) alert("Please stop using bad browsers. :(");
@@ -234,8 +233,14 @@ if(EASEL_OVERRIDE_WINDOW)
 				LOG_DEV(_e);
 			}
 		});
-		document.addEventListener("click", function (_e) {
-			__EASEL_KBFOCUS = null;
+		window.addEventListener("click", function (_e) {
+			if(__EASEL_KBFOCUS_CHANGED) {
+				__EASEL_KBFOCUS_CHANGED = false;
+			} else {
+				__EASEL_KBFOCUS = null;
+				LOG_DEV("Easel focus null");
+			}
+			LOG_DEV(_e);
 		})
 	} else {
 		// TODO Add window hooks for crap browsers
@@ -337,20 +342,22 @@ Easel.prototype.__hook_load = function (_event)
 	this.__hook_DEBUG(_event);
 };
 
-Easel.prototype.__hook_click = function ()
+Easel.prototype.__hook_click = function (_event)
 {
 	__EASEL_KBFOCUS = this;
+	__EASEL_KBFOCUS_CHANGED = true;
 	LOG_DEV("Easel click (kb focus)");
+	LOG_DEV(__EASEL_KBFOCUS);
 	this.__hook_DEBUG(_event);
 };
 
-Easel.prototype.__hook_mousedown = function ()
+Easel.prototype.__hook_mousedown = function (_event)
 {
 	LOG_DEV("Easel mousedown");
 	this.__hook_DEBUG(_event);
 };
 
-Easel.prototype.__hook_mouseup = function ()
+Easel.prototype.__hook_mouseup = function (_event)
 {
 	LOG_DEV("Easel mouseup");
 	this.__hook_DEBUG(_event);
