@@ -50,7 +50,17 @@ var UTIL = {
 	INARR: function (param, array) { return (array.indexOf(param) >= 0); },
 	INOBJ: function (param, object) { return object.hasOwnProperty(param); },
 	SIZE: function (object) { return (UTIL.DICT(object) ? Object.keys(object).length : UTIL.ARR(object) ? object.length : -1); },
-	STRINGIFY: function (object, iteration) { var iteration=UTIL.DEF(iteration)?iteration+1:0;if(iteration>1) return "## ITERATION_LIMIT_EXCEEDED ##"; if(!UTIL.OBJ(object)) return (UTIL.FUNC(object) ? "## FUNCTION ##" : String(object)); let string = "{"; for(var k in object) string += (string.length==1?"":",") + (UTIL.OBJ(object[k]) ? UTIL.STRINGIFY(object[k],iteration) : ("\""+ k +"\":"+ (UTIL.STR(object[k])?"\""+object[k]+"\"":String(object[k])))); return string + "}"; }
+	STRINGIFY: function (object, iteration) {
+		var iteration = UTIL.DEF(iteration) ? (iteration+1) : 0;
+		if(iteration>3)
+			return "## ITERATION_LIMIT_EXCEEDED ##";
+		if(!UTIL.OBJ(object))
+			return (UTIL.FUNC(object) ? "<Function>" : "\""+ String(object) +"\"");
+		let string = "{";
+		for(var k in object)
+			string += (string.length==1?"":",") + ("\""+ k +"\":"+ UTIL.STRINGIFY(object[k],iteration));
+		return string + "}";
+	}
 };
 
 UTIL.DEBUG_SET (UTIL.DEBUGMODE.WARN | UTIL.DEBUGMODE.ERR | UTIL.DEBUGMODE.INFO | UTIL.DEBUGMODE.PERF | UTIL.DEBUGMODE.DEV);
@@ -208,8 +218,11 @@ var LOG_DEV = UTIL.LOG_DEV;
 // Some EasEL variables used for window management and control
 const __EASEL_NICEBROWSER = (window.addEventListener !== undefined);
 var EASEL_OVERRIDE_WINDOW = EASEL_OVERRIDE_WINDOW===undefined ? true : EASEL_OVERRIDE_WINDOW;
-var __EASEL_KBFOCUS = null;
-var __EASEL_KBFOCUS_CHANGED = false;
+var __EASEL_FOCUS = null;
+var __EASEL_MOUSEDOWN_IN = null;
+var __EASEL_MOUSEUP_IN = null;
+var __EASEL_MOUSEMOVE_NEW = null;
+var __EASEL_MOUSEMOVE_IN = null;
 var __EASEL_COUNT = 0;
 
 // Perform actions based on window state etc.
@@ -219,89 +232,101 @@ if(EASEL_OVERRIDE_WINDOW)
 	var window_load = function (_e) {
 		LOG_INFO("Ready!");
 	};
-	var window_keypress = function (_e) {
-		if(__EASEL_KBFOCUS instanceof Easel) {
-			__EASEL_KBFOCUS.__hook_keypress(_e);
+	var window_mouseup = function (_e) {
+		if(!UTIL.INSTIS(__EASEL_MOUSEDOWN_IN, Easel)
+		&& !UTIL.INSTIS(__EASEL_MOUSEUP_IN, Easel)) {
+			if(UTIL.INSTIS(__EASEL_FOCUS, Easel))
+				__EASEL_FOCUS.takeFocus();
+			__EASEL_FOCUS = null;
+		}
+		__EASEL_MOUSEDOWN_IN = null;
+		__EASEL_MOUSEUP_IN = null;
+	};
+	var window_click = function (_e) {
+		/*if(__EASEL_FOCUS_CHANGED > 0) {
+			_e.preventDefault();
+		} else if(!UTIL.NULL(__EASEL_FOCUS)) {
+			if(UTIL.INSTIS(__EASEL_FOCUS, Easel))
+				LOG_DEV(["No Easel:", "click", "(Defocussed Easel "+ __EASEL_FOCUS.__ID +")"]);
+			else
+				LOG_DEV(["No Easel:", "click", "__EASEL_FOCUS was not an Easel"]);
+			__EASEL_FOCUS = null;
+		} else {
+			LOG_DEV(["No Easel:", "click", _e]);
+		}*/
+	};
+	var window_context = function (_e) {
+		if(UTIL.INSTIS(__EASEL_MOUSEDOWN_IN, Easel))
+			if(__EASEL_MOUSEDOWN_IN.__do_contextoverride) {
+				_e.preventDefault();
+				LOG_DEV(__EASEL_MOUSEDOWN_IN.ID() +" prevented context");
+			}
+	};
+	var window_mousemove = function (_e) {
+		if(UTIL.INSTIS(__EASEL_MOUSEMOVE_NEW, Easel)
+		|| UTIL.NULL(__EASEL_MOUSEMOVE_NEW))
+			__EASEL_MOUSEMOVE_IN = __EASEL_MOUSEMOVE_NEW;
+		__EASEL_MOUSEMOVE_NEW = null;
+	};
+	var window_mousewheel = function (_e) {
+		if(UTIL.INSTIS(__EASEL_MOUSEMOVE_IN, Easel))
+			if(__EASEL_MOUSEMOVE_IN.__do_wheeloverride)
+				_e.preventDefault();
+	};
+	var window_scroll = function (_e) {
+		// TODO Remove? Not sure if needed
+		if(UTIL.INSTIS(__EASEL_FOCUS, Easel)) {
+			__EASEL_FOCUS.__hook_scroll(_e);
 			_e.preventDefault();
 		} else {
-			LOG_DEV(["No Easel:", "keypress", _e]);
+			LOG_DEV(["<Window>:", "scroll", _e]);
+		}
+	};
+	var window_keypress = function (_e) {
+		if(__EASEL_FOCUS instanceof Easel) {
+			__EASEL_FOCUS.__hook_keypress(_e);
+			_e.preventDefault();
+		} else {
+			LOG_DEV(["<Window>:", "keypress", _e]);
 		}
 	};
 	var window_keydown = function (_e) {
 		if(_e.key=="F5" && _e.ctrlKey) {
 			window.location.reload(true);
-		} else if(__EASEL_KBFOCUS instanceof Easel) {
-			__EASEL_KBFOCUS.__hook_keydown(_e);
+		} else if(__EASEL_FOCUS instanceof Easel) {
+			__EASEL_FOCUS.__hook_keydown(_e);
 			_e.preventDefault();
 		} else {
-			LOG_DEV(["No Easel:", "keydown", _e]);
+			LOG_DEV(["<Window>:", "keydown", _e]);
 		}
 	};
 	var window_keyup = function (_e) {
-		if(__EASEL_KBFOCUS instanceof Easel) {
-			__EASEL_KBFOCUS.__hook_keyup(_e);
+		if(__EASEL_FOCUS instanceof Easel) {
+			__EASEL_FOCUS.__hook_keyup(_e);
 			_e.preventDefault();
 		} else {
-			LOG_DEV(["No Easel:", "keyup", _e]);
-		}
-	};
-	var window_click = function (_e) {
-		if(__EASEL_KBFOCUS_CHANGED > 0) {
-			// TODO Fix bug with click-and-drag off canvas removing focus
-			//  Maybe try using mousedown/up events to manage this feature instead of click/context?
-			--__EASEL_KBFOCUS_CHANGED;
-			_e.preventDefault();
-		} else if(!UTIL.NULL(__EASEL_KBFOCUS)) {
-			if(UTIL.INSTIS(__EASEL_KBFOCUS, Easel))
-				LOG_DEV(["No Easel:", "click", "(Defocussed Easel "+ __EASEL_KBFOCUS.__ID +")"]);
-			else
-				LOG_DEV(["No Easel:", "click", "__EASEL_KBFOCUS was not an Easel"]);
-			__EASEL_KBFOCUS = null;
-		} else {
-			LOG_DEV(["No Easel:", "click", _e]);
-		}
-	};
-	var window_context = function (_e) {
-		if(__EASEL_KBFOCUS_CHANGED > 0) {
-			// TODO Fix bug with click-and-drag off canvas removing focus
-			//  Maybe try using mousedown/up events to manage this feature instead of click/context?
-			--__EASEL_KBFOCUS_CHANGED;
-			if(UTIL.INSTIS(__EASEL_KBFOCUS, Easel) && __EASEL_KBFOCUS.__do_override_context)
-				_e.preventDefault();
-		} else if(!UTIL.NULL(__EASEL_KBFOCUS)) {
-			if(UTIL.INSTIS(__EASEL_KBFOCUS, Easel))
-				LOG_DEV(["No Easel:", "context", "(Defocussed Easel "+ __EASEL_KBFOCUS.__ID +")"]);
-			else
-				LOG_DEV(["No Easel:", "context", "__EASEL_KBFOCUS was not an Easel"]);
-			__EASEL_KBFOCUS = null;
-		} else {
-			LOG_DEV(["No Easel:", "context", _e]);
-		}
-	};
-	var window_scroll = function (_e) {
-		if(__EASEL_KBFOCUS instanceof Easel) {
-			__EASEL_KBFOCUS.__hook_scroll(_e);
-			_e.preventDefault();
-		} else {
-			LOG_DEV(["No Easel:", "scroll", _e]);
+			LOG_DEV(["<Window>:", "keyup", _e]);
 		}
 	};
 
 	// TODO Cursor locking capability
 	/*  https://www.html5rocks.com/en/tutorials/pointerlock/intro/  */
 	/*
-		if(UTIL.INSTIS(__EASEL_KBFOCUS, Easel) && __EASEL_KBFOCUS.__do_lock_cursor)
+		if(UTIL.INSTIS(__EASEL_FOCUS, Easel) && __EASEL_FOCUS.__do_lock_cursor)
 			{ lock cursor to given canvas element }
 	*/
 
 	if(__EASEL_NICEBROWSER) {
 		window.addEventListener("load", window_load);
+		window.addEventListener("mousemove", window_mousemove);
+		window.addEventListener("mouseup", window_mouseup);
+		window.addEventListener("click", window_click);
+		window.addEventListener("contextmenu", window_context);
+		window.addEventListener("mousewheel", window_mousewheel);
+		//window.addEventListener("scroll", window_scroll);
 		window.addEventListener("keypress", window_keypress);
 		window.addEventListener("keydown", window_keydown);
 		window.addEventListener("keyup", window_keyup);
-		window.addEventListener("click", window_click);
-		window.addEventListener("contextmenu", window_context);
-		//window.addEventListener("scroll", window_scroll);
 	} else {
 		// TODO Add window hooks for crap browsers
 	}
@@ -329,13 +354,23 @@ var Easel = function (_canvasDOM)
 	this.__C_VALID = false;
 	this.__component_store = []; // Stores components particular to this Easel
 	this.__component_order = []; // References to used components, used when z-sorting
-	this.__do_override_context = false;
-	this.__do_lock_cursor = false;
+	this.__do_contextoverride = true;
+	this.__do_wheeloverride = true;
+	this.__do_cursorlock = false;
 	this.__FREEZE = false;
 	this.__DEBUG = false;
+	this.__x = 0;
+	this.__y = 0;
+	this.__w = 0;
+	this.__h = 0;
 
 	this._canvasTarget(_canvasDOM);
 };
+
+Easel.prototype.ID = function ()
+{
+	return "Easel "+ (this.__ID>9?"":"0") + this.__ID;
+}
 
 Easel.prototype._canvasTarget = function (_canvasDOM)
 {
@@ -350,8 +385,11 @@ Easel.prototype._canvasTarget = function (_canvasDOM)
 			this.__C = _canvasDOM;
 			this._canvasHook(this.__C);
 			this.__C_VALID = true;
+			this._updateCanvasMeasure();
 			return this.__C;
 		}
+
+	this._updateCanvasMeasure();
 	return false;
 };
 
@@ -393,16 +431,52 @@ Easel.prototype._canvasUnhook = function (_canvasDOM)
 	}
 };
 
-Easel.prototype._canvasPos = function ()
+Easel.prototype._updateCanvasMeasure = function ()
 {
-	var pos = this.__C.getBoundingClientRect();
-	return {x: pos.left, y: pos.top};
+	if(this.__C_VALID) {
+		var canvasRect = this.__C.getBoundingClientRect();
+		this.__x = canvasRect.left;
+		this.__y = canvasRect.top;
+		this.__w = canvasRect.right - canvasRect.left;
+		this.__h = canvasRect.bottom - canvasRect.top;
+	} else {
+		this.__x = 0;
+		this.__y = 0;
+		this.__w = 0;
+		this.__h = 0;
+	}
 };
+
+Easel.prototype.canvasMeasure = function ()
+{
+	this._updateCanvasMeasure();
+	// TODO: Maybe remove for performance, depends how often canvasMeasure is called
+	return {x: this.__x, y: this.__y, w: this.__w, h: this.__h};
+}
 
 Easel.prototype._eventPos = function (_event)
 {
-	var canvasPos = this._canvasPos();
-	return {x: _event.clientX - canvasPos.x, y: _event.clientY - canvasPos.y};
+	var cm = this.canvasMeasure();
+	var eX = _event.clientX - cm.x;
+	var eY = _event.clientY - cm.y;
+	return {x: eX, y: eY, rx: (cm.w>0 ? (eX/cm.w) : 0), ry: (cm.h>0 ? (eY/cm.h) : 0)};
+};
+
+Easel.prototype._eventMouse = function (_event)
+{
+	var eventMouse = this._eventPos(_event);
+	eventMouse.b = _event.button;
+	return eventMouse;
+};
+
+Easel.prototype._eventWheel = function (_event)
+{
+	var eventWheel = this._eventPos(_event);
+	eventWheel.h = _event.deltaX;
+	eventWheel.v = _event.deltaY;
+	eventWheel.d = _event.deltaZ;
+	eventWheel.m = _event.deltaMode;
+	return eventWheel;
 };
 
 Easel.prototype._eventKey = function (_event)
@@ -416,20 +490,32 @@ Easel.prototype._eventKey = function (_event)
 
 Easel.prototype.hasFocus = function ()
 {
-	return (__EASEL_KBFOCUS === this);
+	return (__EASEL_FOCUS === this);
 };
 
-Easel.prototype.setAsFocus = function ()
+Easel.prototype.giveFocus = function ()
 {
-	if(!this.hasFocus())
-		LOG_DEV("Easel focus changed to Easel "+ this.__ID);
-	__EASEL_KBFOCUS = this;
-	++__EASEL_KBFOCUS_CHANGED;
+	if(!this.hasFocus()) {
+		if(UTIL.INSTIS(__EASEL_FOCUS, Easel))
+			__EASEL_FOCUS.takeFocus();
+		LOG_DEV(this.ID() +" GIVEN FOCUS");
+	}
+	__EASEL_FOCUS = this;
+	this.__C.style.borderColor = "#eaa";
+};
+
+Easel.prototype.takeFocus = function ()
+{
+	if(this.hasFocus()) {
+		LOG_DEV(this.ID() +" LOSES FOCUS");
+		__EASEL_FOCUS = null;
+	}
+	this.__C.style.borderColor = "#ccc";
 };
 
 Easel.prototype.__hook_default = function ()
 {
-	var printArgs = ["Easel "+ (this.__ID>9?"":"0") + this.__ID +":"];
+	var printArgs = [this.ID() +":"];
 	for(var a in arguments) printArgs.push(arguments[a]);
 	LOG_DEV(printArgs, null);
 };
@@ -441,15 +527,13 @@ Easel.prototype.__hook_load = function (_event)
 
 Easel.prototype.__hook_click = function (_event)
 {
-	this.setAsFocus();
 	var ePos = this._eventPos(_event);
 	var eButton = _event.button;
-	this.__hook_default("click       @ "+ ePos.x +","+ ePos.y +" (button "+ eButton +")");
+	this.__hook_default("click       # "+ eButton +" @ "+ ePos.x +","+ ePos.y);
 };
 
 Easel.prototype.__hook_context = function (_event)
 {
-	this.setAsFocus();
 	var ePos = this._eventPos(_event);
 	var eButton = _event.button;
 	this.__hook_default("contextmenu @ "+ ePos.x +","+ ePos.y);
@@ -457,27 +541,33 @@ Easel.prototype.__hook_context = function (_event)
 
 Easel.prototype.__hook_mousedown = function (_event)
 {
-	var ePos = this._eventPos(_event);
-	var eButton = _event.button;
-	this.__hook_default("mousedown   @ "+ ePos.x +","+ ePos.y +" using button "+ eButton);
+	var eMouse = this._eventMouse(_event);
+	__EASEL_MOUSEDOWN_IN = this;
+	this.__hook_default("mousedown   # "+ eMouse.b +" @ "+ eMouse.x +","+ eMouse.y);
 };
 
 Easel.prototype.__hook_mouseup = function (_event)
 {
-	var ePos = this._eventPos(_event);
-	var eButton = _event.button;
-	this.__hook_default("mouseup     @ "+ ePos.x +","+ ePos.y +" using button "+ eButton);
+	var eMouse = this._eventMouse(_event);
+	__EASEL_MOUSEUP_IN = this;
+	if(__EASEL_MOUSEDOWN_IN === this)
+		this.giveFocus();
+	this.__hook_default("mouseup     # "+ eMouse.b +" @ "+ eMouse.x +","+ eMouse.y);
 };
 
 Easel.prototype.__hook_mousemove = function (_event)
 {
+	__EASEL_MOUSEMOVE_NEW = this;
+	var ePos = this._eventPos(_event);
+	this.__hook_default("mousemove   @ "+ ePos.x +","+ ePos.y);
 	/*var ePos = this._eventPos(_event);
 	LOG_DEV("Moved over Easel "+ this.__ID +" at "+ ePos.x +","+ ePos.y);*/
 };
 
 Easel.prototype.__hook_mousewheel = function (_event)
 {
-	this.__hook_default("mousewheel  @ ", _event);
+	var eWheel = this._eventWheel(_event);
+	this.__hook_default("mousewheel  @ ", eWheel);
 };
 
 Easel.prototype.__hook_scroll = function (_event)

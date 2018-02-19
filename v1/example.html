@@ -12,9 +12,11 @@
 	</style>
 </head>
 <body>
-	<canvas id="nameOfCanvas" width="640" height="480"></canvas>
+	<canvas id="firstCanvas" width="640" height="480"></canvas>
+	<canvas id="otherCanvas" width="640" height="160"></canvas>
 	<script type="text/javascript">
-		var easel = new Easel(document.getElementById("nameOfCanvas"));
+		var easelA = new Easel(document.getElementById("firstCanvas"));
+		var easelB = new Easel(document.getElementById("otherCanvas"));
 		/*var zoneTemplate_style = new EaselZone("stylezone", {
 			style: {backgroundColor: "#e88", borderColor: ["#0c0","#0c0"]},
 			x: 0.1, y: 0.1, w: 0.3, h: 0.1
