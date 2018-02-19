@@ -297,7 +297,7 @@ if(EASEL_OVERRIDE_WINDOW)
 			__EASEL_FOCUS.__hook_keydown(_e);
 			_e.preventDefault();
 		} else {
-			LOG_DEV(["<Window>:", "keydown", _e]);
+			//LOG_DEV(["<Window>:", "keydown", _e]);
 		}
 	};
 	var window_keyup = function (_e) {
@@ -305,7 +305,7 @@ if(EASEL_OVERRIDE_WINDOW)
 			__EASEL_FOCUS.__hook_keyup(_e);
 			_e.preventDefault();
 		} else {
-			LOG_DEV(["<Window>:", "keyup", _e]);
+			//LOG_DEV(["<Window>:", "keyup", _e]);
 		}
 	};
 
@@ -472,8 +472,8 @@ Easel.prototype._eventMouse = function (_event)
 Easel.prototype._eventWheel = function (_event)
 {
 	var eventWheel = this._eventPos(_event);
-	eventWheel.h = _event.deltaX;
-	eventWheel.v = _event.deltaY;
+	eventWheel.h = _event.shiftKey ? _event.deltaY : _event.deltaX;
+	eventWheel.v = _event.shiftKey ? _event.deltaX : _event.deltaY;
 	eventWheel.d = _event.deltaZ;
 	eventWheel.m = _event.deltaMode;
 	return eventWheel;
@@ -559,15 +559,13 @@ Easel.prototype.__hook_mousemove = function (_event)
 {
 	__EASEL_MOUSEMOVE_NEW = this;
 	var ePos = this._eventPos(_event);
-	this.__hook_default("mousemove   @ "+ ePos.x +","+ ePos.y);
-	/*var ePos = this._eventPos(_event);
-	LOG_DEV("Moved over Easel "+ this.__ID +" at "+ ePos.x +","+ ePos.y);*/
+	//this.__hook_default("mousemove   @ "+ ePos.x +","+ ePos.y);
 };
 
 Easel.prototype.__hook_mousewheel = function (_event)
 {
 	var eWheel = this._eventWheel(_event);
-	this.__hook_default("mousewheel  @ ", eWheel);
+	this.__hook_default("mousewheel  @ "+ eWheel.x +","+ eWheel.y +" H:"+ eWheel.h +" V:"+ eWheel.v +" D:"+ eWheel.d +" (m "+ eWheel.m +")");
 };
 
 Easel.prototype.__hook_scroll = function (_event)
