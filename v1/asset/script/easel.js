@@ -595,7 +595,7 @@ Easel.prototype.clear = function ()
 {
 	this.clearChildren();
 	this.redraw();
-}
+};
 
 
 
@@ -613,8 +613,9 @@ Easel.prototype.clear = function ()
 
 var EaselComponent = function ()
 {
-	this.events = {};
-	this.style = {};
+	this._events = {};
+	this._paint = {};
+	this._children = {};
 
 	for(var a=0; a<arguments.length; ++a)
 	{
@@ -626,3 +627,7 @@ var EaselComponent = function ()
 			LOG_ERR("Cannot copy non-object properties");
 	}
 }
+
+EaselComponent.prototype.__copyFrom = function () {
+	
+};
