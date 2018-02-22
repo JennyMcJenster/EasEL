@@ -51,6 +51,7 @@ var UTIL = {
 	INOBJ: function (param, object) { return object.hasOwnProperty(param); },
 	SIZE: function (object) { return (UTIL.DICT(object) ? Object.keys(object).length : UTIL.ARR(object) ? object.length : -1); },
 	STRINGIFY: function (object, iteration) {
+		// TODO Check this, something funky seems to be happening on stringify-ing certain deep objects
 		var iteration = UTIL.DEF(iteration) ? (iteration+1) : 0;
 		if(iteration>3)
 			return "## ITERATION_LIMIT_EXCEEDED ##";
@@ -64,7 +65,6 @@ var UTIL = {
 };
 
 UTIL.DEBUG_SET (UTIL.DEBUGMODE.WARN | UTIL.DEBUGMODE.ERR | UTIL.DEBUGMODE.INFO | UTIL.DEBUGMODE.PERF | UTIL.DEBUGMODE.DEV);
-
 
 
 // Set up language features
@@ -184,6 +184,9 @@ var LANG = {
 	}
 };
 
+
+// LANG testing suite, just in case
+
 if(false && UTIL.DEBUG_GET(UTIL.DEBUGMODE.DEV)) {
 	LANG.Put("teststr_0", "Test 0");
 	LANG.Put("teststr_1", "Test 1  |  p={{param}}");
@@ -215,9 +218,28 @@ var LOG_INFO = UTIL.LOG_INFO;
 var LOG_PERF = UTIL.LOG_PERF;
 var LOG_DEV = UTIL.LOG_DEV;
 
+// Let's find out if you're using a bad browser, and call you a heathen if so...
+if(!UTIL.DEF(window.addEventListener)) alert("Please stop using bad browsers. :(");
+// ...then, just to make life easier, create our own add/removeEventListener
+var addEvent = function (el, ev, fn) {
+	if(UTIL.DEF(window.addEventListener))
+		el.addEventListener(ev, fn, false);
+	else if(UTIL.DEF(window.attachEvent))
+		el.attachEvent(ev, fn);
+	else
+		UTIL.LOG_ERR("Sorry, but what in the fresh ass is your browser?");
+};
+var remEvent = function (el, ev, fn) {
+	if(UTIL.DEF(window.removeEventListener))
+		el.removeEventListener(ev, fn, false);
+	else if(UTIL.DEF(window.detachEvent))
+		el.detachEvent(ev, fn);
+	else
+		UTIL.LOG_ERR("Seriously, what the hell kind of browser is this?");
+};
+
+
 // Some EasEL variables used for window management and control
-const __EASEL_NICEBROWSER = (window.addEventListener !== undefined);
-var EASEL_OVERRIDE_WINDOW = EASEL_OVERRIDE_WINDOW===undefined ? true : EASEL_OVERRIDE_WINDOW;
 var __EASEL_FOCUS = null;
 var __EASEL_MOUSEDOWN_IN = null;
 var __EASEL_MOUSEUP_IN = null;
@@ -225,8 +247,8 @@ var __EASEL_MOUSEMOVE_NEW = null;
 var __EASEL_MOUSEMOVE_IN = null;
 var __EASEL_COUNT = 0;
 
-// Perform actions based on window state etc.
-if(!__EASEL_NICEBROWSER) alert("Please stop using bad browsers. :(");
+// If this is the first time EasEL has been included, let's do some overriding
+var EASEL_OVERRIDE_WINDOW = EASEL_OVERRIDE_WINDOW===undefined ? true : EASEL_OVERRIDE_WINDOW;
 if(EASEL_OVERRIDE_WINDOW)
 {
 	var window_load = function (_e) {
@@ -316,21 +338,19 @@ if(EASEL_OVERRIDE_WINDOW)
 			{ lock cursor to given canvas element }
 	*/
 
-	if(__EASEL_NICEBROWSER) {
-		window.addEventListener("load", window_load);
-		window.addEventListener("mousemove", window_mousemove);
-		window.addEventListener("mouseup", window_mouseup);
-		window.addEventListener("click", window_click);
-		window.addEventListener("contextmenu", window_context);
-		window.addEventListener("mousewheel", window_mousewheel);
-		//window.addEventListener("scroll", window_scroll);
-		window.addEventListener("keypress", window_keypress);
-		window.addEventListener("keydown", window_keydown);
-		window.addEventListener("keyup", window_keyup);
-	} else {
-		// TODO Add window hooks for crap browsers
-	}
+	addEvent(window, "load", window_load);
+	addEvent(window, "mousemove", window_mousemove);
+	addEvent(window, "mouseup", window_mouseup);
+	addEvent(window, "click", window_click);
+	addEvent(window, "contextmenu", window_context);
+	addEvent(window, "mousewheel", window_mousewheel);
+	//addEvent(window, "scroll", window_scroll);
+	addEvent(window, "keypress", window_keypress);
+	addEvent(window, "keydown", window_keydown);
+	addEvent(window, "keyup", window_keyup);
 }
+
+
 
 /*
 	Easel Object
@@ -395,40 +415,24 @@ Easel.prototype._canvasTarget = function (_canvasDOM)
 
 Easel.prototype._canvasHook = function (_canvasDOM)
 { // EXPECTS _canvasDOM TO EXIST AND BE A VALID CANVAS
-	if(__EASEL_NICEBROWSER)
-	{
-		_canvasDOM.addEventListener("load", (e)=>{this.__hook_load(e);});
-		_canvasDOM.addEventListener("click", (e)=>{this.__hook_click(e);});
-		_canvasDOM.addEventListener("contextmenu", (e)=>{this.__hook_context(e);});
-		_canvasDOM.addEventListener("mousedown", (e)=>{this.__hook_mousedown(e);});
-		_canvasDOM.addEventListener("mouseup", (e)=>{this.__hook_mouseup(e);});
-		_canvasDOM.addEventListener("mousemove", (e)=>{this.__hook_mousemove(e);});
-		_canvasDOM.addEventListener("mousewheel", (e)=>{this.__hook_mousewheel(e);});
-	}
-	else
-	{
-		// TODO Add event hooks for crap browsers
-		//_canvasDOM.attachEvent("onload", ...
-	}
+	addEvent(_canvasDOM, "load", (_e)=>{this.__hook_load(_e);});
+	addEvent(_canvasDOM, "click", (_e)=>{this.__hook_click(_e);});
+	addEvent(_canvasDOM, "contextmenu", (_e)=>{this.__hook_context(_e);});
+	addEvent(_canvasDOM, "mousedown", (_e)=>{this.__hook_mousedown(_e);});
+	addEvent(_canvasDOM, "mouseup", (_e)=>{this.__hook_mouseup(_e);});
+	addEvent(_canvasDOM, "mousemove", (_e)=>{this.__hook_mousemove(_e);});
+	addEvent(_canvasDOM, "mousewheel", (_e)=>{this.__hook_mousewheel(_e);});
 };
 
 Easel.prototype._canvasUnhook = function (_canvasDOM)
 { // EXPECTS _canvasDOM TO EXIST AND BE A VALID CANVAS
-	if(__EASEL_NICEBROWSER)
-	{
-		_canvasDOM.removeEventListener("load");
-		_canvasDOM.removeEventListener("click");
-		_canvasDOM.removeEventListener("contextmenu");
-		_canvasDOM.removeEventListener("mousedown");
-		_canvasDOM.removeEventListener("mouseup");
-		_canvasDOM.removeEventListener("mousemove");
-		_canvasDOM.removeEventListener("mousewheel");
-	}
-	else
-	{
-		// TODO Add event unhooks for crap browsers
-		//_canvasDOM.detachEvent("onload", ...
-	}
+	remEvent(_canvasDOM, "load", (_e)=>{this.__hook_load(_e);});
+	remEvent(_canvasDOM, "click", (_e)=>{this.__hook_click(_e);});
+	remEvent(_canvasDOM, "contextmenu", (_e)=>{this.__hook_context(_e);});
+	remEvent(_canvasDOM, "mousedown", (_e)=>{this.__hook_mousedown(_e);});
+	remEvent(_canvasDOM, "mouseup", (_e)=>{this.__hook_mouseup(_e);});
+	remEvent(_canvasDOM, "mousemove", (_e)=>{this.__hook_mousemove(_e);});
+	remEvent(_canvasDOM, "mousewheel", (_e)=>{this.__hook_mousewheel(_e);});
 };
 
 Easel.prototype._updateCanvasMeasure = function ()
@@ -629,5 +633,5 @@ var EaselComponent = function ()
 }
 
 EaselComponent.prototype.__copyFrom = function () {
-	
+
 };
