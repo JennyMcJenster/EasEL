@@ -37,6 +37,8 @@ var UTIL = {
 	NULL: function (param) { return (param === null); },
 	NUM: function (param) { return (typeof param === "number"); },
 	NUMBER: function (param) { return (typeof param === "number"); },
+	INT: function (param) { return (typeof param === "number" && Number.isInteger(param)); )},
+	INTEGER: function (param) { return (typeof param === "number" && Number.isInteger(param)); },
 	STR: function (param) { return (typeof param === "string"); },
 	STRING: function (param) { return (typeof param === "string"); },
 	OBJ: function (param) { return (typeof param === "object" && param !== null); },
@@ -47,8 +49,9 @@ var UTIL = {
 	ARRAY: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor===Array); },
 	FUNC: function (param) { return (typeof param === "function"); },
 	FUNCTION: function (param) { return (typeof param === "function"); },
-	INARR: function (param, array) { return (array.indexOf(param) >= 0); },
 	INOBJ: function (param, object) { return object.hasOwnProperty(param); },
+	INDICT: function (param, dict) { return dict.hasOwnProperty(param); },
+	INARR: function (param, array) { return (array.indexOf(param) >= 0); },
 	SIZE: function (object) { return (UTIL.DICT(object) ? Object.keys(object).length : UTIL.ARR(object) ? object.length : -1); },
 	STRINGIFY: function (object, iteration) {
 		// TODO Check this, something funky seems to be happening on stringify-ing certain deep objects
@@ -61,7 +64,8 @@ var UTIL = {
 		for(var k in object)
 			string += (string.length==1?"":",") + ("\""+ k +"\":"+ UTIL.STRINGIFY(object[k],iteration));
 		return string + "}";
-	}
+	},
+	VALIDCANVAS: function (param) { return UTIL.OBJ(param) && param.nodeName === "CANVAS"; }
 };
 
 UTIL.DEBUG_SET (UTIL.DEBUGMODE.WARN | UTIL.DEBUGMODE.ERR | UTIL.DEBUGMODE.INFO | UTIL.DEBUGMODE.PERF | UTIL.DEBUGMODE.DEV);
@@ -278,22 +282,33 @@ if(EASEL_OVERRIDE_WINDOW)
 		}*/
 	};
 	var window_context = function (_e) {
-		if(UTIL.INSTIS(__EASEL_MOUSEDOWN_IN, Easel))
-			if(__EASEL_MOUSEDOWN_IN.__do_contextoverride) {
+		if(UTIL.INSTIS(__EASEL_MOUSEMOVE_IN, Easel))
+			if(__EASEL_MOUSEMOVE_IN.__do_contextoverride) {
 				_e.preventDefault();
-				LOG_DEV(__EASEL_MOUSEDOWN_IN.ID() +" prevented context");
+				LOG_DEV(__EASEL_MOUSEMOVE_IN.ID() +" prevented context");
 			}
 	};
 	var window_mousemove = function (_e) {
-		if(UTIL.INSTIS(__EASEL_MOUSEMOVE_NEW, Easel)
-		|| UTIL.NULL(__EASEL_MOUSEMOVE_NEW))
+		if(UTIL.INSTIS(__EASEL_MOUSEMOVE_NEW, Easel)) {
+			if(__EASEL_MOUSEMOVE_IN != __EASEL_MOUSEMOVE_NEW) {
+				if(UTIL.INSTIS(__EASEL_MOUSEMOVE_IN, Easel))
+					LOG_DEV(["Mouse left ", __EASEL_MOUSEMOVE_IN.ID()]);
+				LOG_DEV(["Mouse entered ", __EASEL_MOUSEMOVE_NEW.ID()]);
+			}
 			__EASEL_MOUSEMOVE_IN = __EASEL_MOUSEMOVE_NEW;
+		} else {
+			if(UTIL.INSTIS(__EASEL_MOUSEMOVE_IN, Easel))
+				LOG_DEV(["Mouse left ", __EASEL_MOUSEMOVE_IN.ID()]);
+			__EASEL_MOUSEMOVE_IN = null;
+		}
 		__EASEL_MOUSEMOVE_NEW = null;
 	};
 	var window_mousewheel = function (_e) {
 		if(UTIL.INSTIS(__EASEL_MOUSEMOVE_IN, Easel))
-			if(__EASEL_MOUSEMOVE_IN.__do_wheeloverride)
+			if(__EASEL_MOUSEMOVE_IN.__do_wheeloverride) {
 				_e.preventDefault();
+				LOG_DEV(__EASEL_MOUSEMOVE_IN.ID() +" prevented mousewheel");
+			}
 	};
 	var window_scroll = function (_e) {
 		// TODO Remove? Not sure if needed
@@ -352,11 +367,23 @@ if(EASEL_OVERRIDE_WINDOW)
 
 
 
+// Define event types for an easel and components to recognise
+
+var EASEL_EVENT = Object.freeze({
+	NULL: 0x0,
+	LOAD: 0x1, UNLOAD: 0x2, CREATE: 0x3, DESTROY: 0x4,
+	MOUSEMOVE: 0x10, MOUSEUP: 0x11, MOUSEDOWN: 0x12,
+	MOUSEWHEEL: 0x13, CLICK: 0x14, CONTEXT: 0x15,
+	KEYPRESS: 0x20, KEYDOWN: 0x21, KEYUP: 0x22
+});
+
+
+
 /*
 	Easel Object
 
 	// Create an Easel
-		var easel = new Easel ( <target canvas dom element> );
+		var easel = new Easel ( [<target canvas dom element>, ...] );
 	// Add/Remove components to an Easel
 		easel.add ( <component to add> [, <component to add>, ...] );
 		easel.remove ( <component to remove> [, <component to remove>, ...] );
@@ -365,26 +392,32 @@ if(EASEL_OVERRIDE_WINDOW)
 		easel.freeze ( <true/false> );
 */
 
-
-var Easel = function (_canvasDOM)
+var Easel = function ()
 {
 	this.__ID = ++__EASEL_COUNT;
-	this.__C = null;
-	this.__CTX = null;
-	this.__C_VALID = false;
-	this.__component_store = []; // Stores components particular to this Easel
-	this.__component_order = []; // References to used components, used when z-sorting
+	this.__C = []; // Stores all hooked canvas DOM objects
+	this.__C_MODE = []; // Tracks display modes for each canvas
+	this.__C_MEASURE = []; // Tracks the sizes of each canvas
+	this.__widgets = []; // Stores widgets particular to this Easel
+	this.__layers = []; // Collection of rendering layers, containing widets and such
 	this.__do_contextoverride = true;
 	this.__do_wheeloverride = true;
 	this.__do_cursorlock = false;
 	this.__FREEZE = false;
 	this.__DEBUG = false;
-	this.__x = 0;
-	this.__y = 0;
-	this.__w = 0;
-	this.__h = 0;
 
-	this._canvasTarget(_canvasDOM);
+	// TODO Add own size properties, set by first canvas attached
+
+	for(var i in arguments)
+		this._addCanvasTarget(arguments[i]);
+};
+
+Easel.DISPLAYMODE = { // TODO Implement cloning modes
+	COPY: 0b0, // Copies without change, default behaviour
+	STRETCH: 0b1, // Stretches to fill entire canvas, with distortion
+	FILL: 0b10, // Stretches to fill the available space, does not distort but clips edges
+	FIT: 0b100, // Stretches to fit entire contents to canvas, without distortion
+	VIEWPORT: 0b1000 // Manual resizing of canvas as
 };
 
 Easel.prototype.ID = function ()
@@ -392,6 +425,64 @@ Easel.prototype.ID = function ()
 	return "Easel "+ (this.__ID>9?"":"0") + this.__ID;
 }
 
+Easel.prototype._canvasHook = function (_canvasDOM, _displayMode)
+{
+	if(UTIL.VALIDCANVAS(_canvasDOM))
+	{
+		this.__C.push(_canvasDOM);
+		addEvent(_canvasDOM, "load", (_e)=>{this.__hook_load(_e);});
+		addEvent(_canvasDOM, "click", (_e)=>{this.__hook_click(_e);});
+		addEvent(_canvasDOM, "contextmenu", (_e)=>{this.__hook_context(_e);});
+		addEvent(_canvasDOM, "mousedown", (_e)=>{this.__hook_mousedown(_e);});
+		addEvent(_canvasDOM, "mouseup", (_e)=>{this.__hook_mouseup(_e);});
+		addEvent(_canvasDOM, "mousemove", (_e)=>{this.__hook_mousemove(_e);});
+		addEvent(_canvasDOM, "mousewheel", (_e)=>{this.__hook_mousewheel(_e);});
+		var canvasIndex = this.__C.length - 1;
+		this._updateCanvasMeasure(canvasIndex);
+		this.__C_MODE[canvasIndex] = UTIL.INDICT(_displayMode, Easel.DISPLAYMODE) ? _displayMode : Easel.DISPLAYMODE.COPY;
+		return this.__C[canvasIndex];
+	}
+	return null;
+}
+
+Easel.prototype._canvasUnhook = function (_canvasIndexOrDOM)
+{
+	var unhookTarget = null;
+	var unhookIndex = -1;
+
+	if(UTIL.NUM(_canvasIndexOrDOM) && this.__C.length > _canvasIndexOrDOM)
+	{
+		unhookIndex = _canvasIndexOrDOM;
+		unhookTarget = this.__C[_canvasIndexOrDOM];
+	}
+	else if(UTIL.VALIDCANVAS(_canvasIndexOrDOM))
+	{
+		for(var i=0; i<this.__C.length; ++i)
+			if(this.__C[i] == _canvasIndexOrDOM) {
+				unhookIndex = i;
+				unhookTarget = _canvasIndexOrDOM
+			}
+	}
+
+	if(unhookIndex < 0) {
+		remEvent(unhookTarget, "load", (_e)=>{this.__hook_load(_e);});
+		remEvent(unhookTarget, "click", (_e)=>{this.__hook_click(_e);});
+		remEvent(unhookTarget, "contextmenu", (_e)=>{this.__hook_context(_e);});
+		remEvent(unhookTarget, "mousedown", (_e)=>{this.__hook_mousedown(_e);});
+		remEvent(unhookTarget, "mouseup", (_e)=>{this.__hook_mouseup(_e);});
+		remEvent(unhookTarget, "mousemove", (_e)=>{this.__hook_mousemove(_e);});
+		remEvent(unhookTarget, "mousewheel", (_e)=>{this.__hook_mousewheel(_e);});
+		this.__C.splice(unhookIndex, 1);
+		this.__C_MODE.splice(unhookIndex, 1);
+		this.__C_MEASURE.splice(unhookIndex, 1);
+	}
+}
+
+Easel.prototype.attachCanvas = function (_canvasDOM, _displayMode) {
+	this._canvasHook(_canvasDOM, _displayMode);
+}
+
+/*
 Easel.prototype._canvasTarget = function (_canvasDOM)
 {
 	if(this.__C_VALID === true)
@@ -434,9 +525,11 @@ Easel.prototype._canvasUnhook = function (_canvasDOM)
 	remEvent(_canvasDOM, "mousemove", (_e)=>{this.__hook_mousemove(_e);});
 	remEvent(_canvasDOM, "mousewheel", (_e)=>{this.__hook_mousewheel(_e);});
 };
+*/
 
 Easel.prototype._updateCanvasMeasure = function ()
 {
+	// TODO: Refit for new multi-canvas format
 	if(this.__C_VALID) {
 		var canvasRect = this.__C.getBoundingClientRect();
 		this.__x = canvasRect.left;
@@ -604,22 +697,35 @@ Easel.prototype.clear = function ()
 
 
 /*
-	Easel Component Object
+	Easel Widget Object
 
-	// Create an Easel Component
-		var ec = new EaselComponent ( [<component to inherit from>|<object of component properties to set>, ...] );
+	// Create an Easel Widget
+		var ec = new EaselWidget ( [<widget to inherit from>|<object of component properties to set>, ...] );
 	// Add/Remove a child component to an Easel Component
 		ec.attach ( <component to attach> [, <component to attach>, ...] );
 		ec.detach ( <component to detach> [, <component to detach>, ...] );
 
 */
 
-
-var EaselComponent = function ()
+var EaselWidget = function ()
 {
-	this._events = {};
-	this._paint = {};
-	this._children = {};
+	this.__x = 0;
+	this.__y = 0;
+	this.__w = 0;
+	this.__h = 0;
+	this.__l = 0;
+	this.__t = 0;
+	this.__r = 0;
+	this.__b = 0;
+
+	this.__paint = [];
+	this.__paintHooks = [];
+
+	this.__event = [];
+	this.__eventHooks = [];
+	this.__eventTypes = [];
+
+	this.__children = [];
 
 	for(var a=0; a<arguments.length; ++a)
 	{
