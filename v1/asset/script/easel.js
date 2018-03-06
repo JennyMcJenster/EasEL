@@ -41,15 +41,15 @@ var UTIL = {
 	INTEGER: function (param) { return (typeof param === "number" && Number.isInteger(param)); },
 	STR: function (param) { return (typeof param === "string"); },
 	STRING: function (param) { return (typeof param === "string"); },
+	FUNC: function (param) { return (typeof param === "function"); },
+	FUNCTION: function (param) { return (typeof param === "function"); },
 	OBJ: function (param) { return (typeof param === "object" && param !== null); },
 	OBJECT: function (param) { return (typeof param === "object" && param !== null); },
 	DICT: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor!==Array); },
 	DICTIONARY: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor!==Array); },
 	ARR: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor===Array); },
 	ARRAY: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor===Array); },
-	FUNC: function (param) { return (typeof param === "function"); },
-	FUNCTION: function (param) { return (typeof param === "function"); },
-	INOBJ: function (param, object) { return object.hasOwnProperty(param); },
+	INOBJ: function (param, object) { return UTIL.ARR(object) ? (object.indexOf(param) >= 0) : object.hasOwnProperty(param); },
 	INDICT: function (param, dict) { return dict.hasOwnProperty(param); },
 	INARR: function (param, array) { return (array.indexOf(param) >= 0); },
 	SIZE: function (object) { return (UTIL.DICT(object) ? Object.keys(object).length : UTIL.ARR(object) ? object.length : -1); },
@@ -367,27 +367,15 @@ if(EASEL_OVERRIDE_WINDOW)
 
 
 
-// Define event types for an easel and components to recognise
-
-var EASEL_EVENT = Object.freeze({
-	NULL: 0x0,
-	LOAD: 0x1, UNLOAD: 0x2, CREATE: 0x3, DESTROY: 0x4,
-	MOUSEMOVE: 0x10, MOUSEUP: 0x11, MOUSEDOWN: 0x12,
-	MOUSEWHEEL: 0x13, CLICK: 0x14, CONTEXT: 0x15,
-	KEYPRESS: 0x20, KEYDOWN: 0x21, KEYUP: 0x22
-});
-
-
-
 /*
 	Easel Object
 
 	// Create an Easel
 		var easel = new Easel ( [<target canvas dom element>, ...] );
-	// Add/Remove components to an Easel
-		easel.add ( <component to add> [, <component to add>, ...] );
-		easel.remove ( <component to remove> [, <component to remove>, ...] );
-		// Both of these also allow passing of an array of EaselComponent objects
+	// Add/Remove widgets to an Easel
+		easel.add ( <widget to add> [, <widget to add>, ...] );
+		easel.remove ( <widget to remove> [, <widget to remove>, ...] );
+		// Both of these also allow passing of an array of EaselWidget objects
 	// Freeze an Easel (halt accepting events/input)
 		easel.freeze ( <true/false> );
 */
@@ -412,13 +400,32 @@ var Easel = function ()
 		this._addCanvasTarget(arguments[i]);
 };
 
-Easel.DISPLAYMODE = { // TODO Implement cloning modes
+Easel.DISPLAY = Object.freeze({ // TODO Implement cloning modes
 	COPY: 0b0, // Copies without change, default behaviour
 	STRETCH: 0b1, // Stretches to fill entire canvas, with distortion
 	FILL: 0b10, // Stretches to fill the available space, does not distort but clips edges
 	FIT: 0b100, // Stretches to fit entire contents to canvas, without distortion
 	VIEWPORT: 0b1000 // Manual resizing of canvas as
-};
+});
+
+var Easel.EVENT = Object.freeze({
+	// No event
+	NULL: 0x0,
+	// DOM events
+	LOAD: 0x1, UNLOAD: 0x2,
+	// Object events
+	CREATE: 0x3, DESTROY: 0x4,
+	// Mouse events
+	MOUSEMOVE: 0x10, MOUSEUP: 0x11, MOUSEDOWN: 0x12, MOUSEWHEEL: 0x13,
+	// Specialised Mouse events
+	CLICK: 0x14, CONTEXT: 0x15,
+	// Key events
+	KEYDOWN: 0x20, KEYUP: 0x21,
+	// Specialised Key events
+	KEYPRESS: 0x20,
+	// Paint events
+	PREPAINT: 0x30, PAINT: 0x31, AFTERPAINT: 0x32
+});
 
 Easel.prototype.ID = function ()
 {
@@ -717,27 +724,45 @@ var EaselWidget = function ()
 	this.__t = 0;
 	this.__r = 0;
 	this.__b = 0;
+	this.__data = {};
 
 	this.__paint = [];
 	this.__paintHooks = [];
 
-	this.__event = [];
+	this.__event = {};
 	this.__eventHooks = [];
-	this.__eventTypes = [];
 
 	this.__children = [];
 
 	for(var a=0; a<arguments.length; ++a)
 	{
-		var argument = arguments[0];
-		var argumentType = (typeof argument);
-		if(argumentType == "object")
-			this.__copyFrom(argument);
+		var _arg = arguments[a];
+		if(UTIL.OBJ(_arg))
+			this.__copyFrom(_arg);
 		else
 			LOG_ERR("Cannot copy non-object properties");
 	}
 }
 
-EaselComponent.prototype.__copyFrom = function () {
+EaselWidget.EVENT = {
 
 };
+Object.freeze(EaselWidget.EVENT);
+
+EaselWidget.prototype.__copyFrom = function () {
+	for(var a=0; a<arguments.length; ++a)
+	{
+		var _arg = arguments[a];
+		argKeys = Object.keys(_arg);
+		for(var k in argKeys)
+		{
+			if(UTIL.INDICT(k, this))
+				this[k] = _arg[k];
+			// TODO: Improve this to clone object-type properties
+		}
+	}
+};
+
+EaselWidget.prototype.addEventHook = function () {
+
+}
