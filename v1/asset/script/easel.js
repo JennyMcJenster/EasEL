@@ -36,23 +36,15 @@ var UTIL = {
 	TYPEIS: function (param, type) { return (typeof param === (typeof type === "string" ? type.toLowerCase() : (typeof type))); },
 	NULL: function (param) { return (param === null); },
 	NUM: function (param) { return (typeof param === "number"); },
-	NUMBER: function (param) { return (typeof param === "number"); },
-	INT: function (param) { return (typeof param === "number" && Number.isInteger(param)); )},
-	INTEGER: function (param) { return (typeof param === "number" && Number.isInteger(param)); },
+	INT: function (param) { return (typeof param === "number" && Number.isInteger(param)); },
 	STR: function (param) { return (typeof param === "string"); },
-	STRING: function (param) { return (typeof param === "string"); },
 	FUNC: function (param) { return (typeof param === "function"); },
-	FUNCTION: function (param) { return (typeof param === "function"); },
 	OBJ: function (param) { return (typeof param === "object" && param !== null); },
-	OBJECT: function (param) { return (typeof param === "object" && param !== null); },
 	DICT: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor!==Array); },
-	DICTIONARY: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor!==Array); },
 	ARR: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor===Array); },
-	ARRAY: function (param) { return (typeof param === "object" && param !== null && typeof param.constructor !== "undefined" && param.constructor===Array); },
-	INOBJ: function (param, object) { return UTIL.ARR(object) ? (object.indexOf(param) >= 0) : object.hasOwnProperty(param); },
-	INDICT: function (param, dict) { return dict.hasOwnProperty(param); },
-	INARR: function (param, array) { return (array.indexOf(param) >= 0); },
-	SIZE: function (object) { return (UTIL.DICT(object) ? Object.keys(object).length : UTIL.ARR(object) ? object.length : -1); },
+	KEYIN: function (param, object) { return UTIL.DICT(object) ? object.hasOwnProperty(param) : UTIL.ARR(object) ? (param>=0 && param<object.length) : false; },
+	VALIN: function (param, object) { return UTIL.DICT(object) ? (Object.values(object).indexOf(param)>=0) : UTIL.ARR(object) ? (object.indexOf(param)>=0) : false; },
+	SIZE: function (object) { return UTIL.DICT(object) ? Object.keys(object).length : UTIL.ARR(object) ? object.length : 0; },
 	STRINGIFY: function (object, iteration) {
 		// TODO Check this, something funky seems to be happening on stringify-ing certain deep objects
 		var iteration = UTIL.DEF(iteration) ? (iteration+1) : 0;
@@ -155,7 +147,7 @@ var LANG = {
 		if(!UTIL.STR(id))
 			return UTIL.LOG_ERR("LANG.Put failed; ID should be a string", false);
 		var id = LANG._FormatID(id);
-		if(UTIL.INOBJ(id, LANG.DICTIONARY))
+		if(UTIL.KEYIN(id, LANG.DICTIONARY))
 			return UTIL.LOG_ERR("LANG.Put failed; Dictionary already contains ID \""+ id +"\"", false);
 		if(!UTIL.STR(string))
 			return UTIL.LOG_ERR("LANG.Put failed; Passed a non-string as a parameter", false);
@@ -167,7 +159,7 @@ var LANG = {
 		if(!UTIL.STR(id))
 			return UTIL.LOG_ERR(LANG._LangError(id), "ID should be a string");
 		var id = LANG._FormatID(id);
-		if(!UTIL.INOBJ(id, LANG.DICTIONARY))
+		if(!UTIL.KEYIN(id, LANG.DICTIONARY))
 			return UTIL.LOG_ERR(LANG._LangError(id, tokens), "Dictionary does not contain ID \""+ id +"\"");
 		var dictionaryEntry = LANG.DICTIONARY[id];
 		if(!UTIL.DICT(tokens)) {
@@ -182,7 +174,7 @@ var LANG = {
 		if(tokensPassed != tokensExpect)
 			return UTIL.LOG_ERR(LANG._Interpret(dictionaryEntry, tokens), "ID \""+ id +"\" expected "+ tokensExpect +" tokens, got "+ tokensPassed);
 		for(var tokenID in tokens)
-			if(!UTIL.INARR(LANG._FormatToken(tokenID), dictionaryEntry.tokens))
+			if(!UTIL.VALIN(LANG._FormatToken(tokenID), dictionaryEntry.tokens))
 				return UTIL.LOG_ERR(LANG._Interpret(dictionaryEntry, tokens), "No such token \""+ LANG._FormatToken(tokenID) +"\" in ID \""+ id +"\"");
 		return LANG._Interpret(dictionaryEntry, tokens);
 	}
@@ -245,6 +237,7 @@ var remEvent = function (el, ev, fn) {
 
 // Some EasEL variables used for window management and control
 var __EASEL_FOCUS = null;
+var __EASEL_FOCUS_DOM = null;
 var __EASEL_MOUSEDOWN_IN = null;
 var __EASEL_MOUSEUP_IN = null;
 var __EASEL_MOUSEMOVE_NEW = null;
@@ -252,7 +245,7 @@ var __EASEL_MOUSEMOVE_IN = null;
 var __EASEL_COUNT = 0;
 
 // If this is the first time EasEL has been included, let's do some overriding
-var EASEL_OVERRIDE_WINDOW = EASEL_OVERRIDE_WINDOW===undefined ? true : EASEL_OVERRIDE_WINDOW;
+var EASEL_OVERRIDE_WINDOW = UTIL.UNDEF(EASEL_OVERRIDE_WINDOW) ? true : EASEL_OVERRIDE_WINDOW;
 if(EASEL_OVERRIDE_WINDOW)
 {
 	var window_load = function (_e) {
@@ -384,10 +377,13 @@ var Easel = function ()
 {
 	this.__ID = ++__EASEL_COUNT;
 	this.__C = []; // Stores all hooked canvas DOM objects
+	this.__CTX = []; // Stores context refs for all hooked canvas DOM objects
 	this.__C_MODE = []; // Tracks display modes for each canvas
 	this.__C_MEASURE = []; // Tracks the sizes of each canvas
 	this.__widgets = []; // Stores widgets particular to this Easel
-	this.__layers = []; // Collection of rendering layers, containing widets and such
+	this.__layers = []; // Stores index refs to __widgets, in rendering/layer order
+	this.__events = {}; // All events specific to the base Easel itself
+	this.__KBFOCUS = null;
 	this.__do_contextoverride = true;
 	this.__do_wheeloverride = true;
 	this.__do_cursorlock = false;
@@ -397,7 +393,7 @@ var Easel = function ()
 	// TODO Add own size properties, set by first canvas attached
 
 	for(var i in arguments)
-		this._addCanvasTarget(arguments[i]);
+		this.attachCanvas(arguments[i]);
 };
 
 Easel.DISPLAY = Object.freeze({ // TODO Implement cloning modes
@@ -406,25 +402,6 @@ Easel.DISPLAY = Object.freeze({ // TODO Implement cloning modes
 	FILL: 0b10, // Stretches to fill the available space, does not distort but clips edges
 	FIT: 0b100, // Stretches to fit entire contents to canvas, without distortion
 	VIEWPORT: 0b1000 // Manual resizing of canvas as
-});
-
-var Easel.EVENT = Object.freeze({
-	// No event
-	NULL: 0x0,
-	// DOM events
-	LOAD: 0x1, UNLOAD: 0x2,
-	// Object events
-	CREATE: 0x3, DESTROY: 0x4,
-	// Mouse events
-	MOUSEMOVE: 0x10, MOUSEUP: 0x11, MOUSEDOWN: 0x12, MOUSEWHEEL: 0x13,
-	// Specialised Mouse events
-	CLICK: 0x14, CONTEXT: 0x15,
-	// Key events
-	KEYDOWN: 0x20, KEYUP: 0x21,
-	// Specialised Key events
-	KEYPRESS: 0x20,
-	// Paint events
-	PREPAINT: 0x30, PAINT: 0x31, AFTERPAINT: 0x32
 });
 
 Easel.prototype.ID = function ()
@@ -446,7 +423,7 @@ Easel.prototype._canvasHook = function (_canvasDOM, _displayMode)
 		addEvent(_canvasDOM, "mousewheel", (_e)=>{this.__hook_mousewheel(_e);});
 		var canvasIndex = this.__C.length - 1;
 		this._updateCanvasMeasure(canvasIndex);
-		this.__C_MODE[canvasIndex] = UTIL.INDICT(_displayMode, Easel.DISPLAYMODE) ? _displayMode : Easel.DISPLAYMODE.COPY;
+		this.__C_MODE[canvasIndex] = UTIL.VALIN(_displayMode, Easel.DISPLAY) ? _displayMode : Easel.DISPLAY.COPY;
 		return this.__C[canvasIndex];
 	}
 	return null;
@@ -485,65 +462,31 @@ Easel.prototype._canvasUnhook = function (_canvasIndexOrDOM)
 	}
 }
 
-Easel.prototype.attachCanvas = function (_canvasDOM, _displayMode) {
+Easel.prototype.attachCanvas = function (_canvasDOM, _displayMode)
+{
 	this._canvasHook(_canvasDOM, _displayMode);
 }
 
-/*
-Easel.prototype._canvasTarget = function (_canvasDOM)
-{
-	if(this.__C_VALID === true)
-		this._canvasUnhook(this.__C);
-	this.__C = null;
-	this.__C_VALID = false;
-
-	if(typeof _canvasDOM === "object")
-		if(_canvasDOM.nodeName === "CANVAS")
-		{
-			this.__C = _canvasDOM;
-			this._canvasHook(this.__C);
-			this.__C_VALID = true;
-			this._updateCanvasMeasure();
-			return this.__C;
-		}
-
-	this._updateCanvasMeasure();
-	return false;
-};
-
-Easel.prototype._canvasHook = function (_canvasDOM)
-{ // EXPECTS _canvasDOM TO EXIST AND BE A VALID CANVAS
-	addEvent(_canvasDOM, "load", (_e)=>{this.__hook_load(_e);});
-	addEvent(_canvasDOM, "click", (_e)=>{this.__hook_click(_e);});
-	addEvent(_canvasDOM, "contextmenu", (_e)=>{this.__hook_context(_e);});
-	addEvent(_canvasDOM, "mousedown", (_e)=>{this.__hook_mousedown(_e);});
-	addEvent(_canvasDOM, "mouseup", (_e)=>{this.__hook_mouseup(_e);});
-	addEvent(_canvasDOM, "mousemove", (_e)=>{this.__hook_mousemove(_e);});
-	addEvent(_canvasDOM, "mousewheel", (_e)=>{this.__hook_mousewheel(_e);});
-};
-
-Easel.prototype._canvasUnhook = function (_canvasDOM)
-{ // EXPECTS _canvasDOM TO EXIST AND BE A VALID CANVAS
-	remEvent(_canvasDOM, "load", (_e)=>{this.__hook_load(_e);});
-	remEvent(_canvasDOM, "click", (_e)=>{this.__hook_click(_e);});
-	remEvent(_canvasDOM, "contextmenu", (_e)=>{this.__hook_context(_e);});
-	remEvent(_canvasDOM, "mousedown", (_e)=>{this.__hook_mousedown(_e);});
-	remEvent(_canvasDOM, "mouseup", (_e)=>{this.__hook_mouseup(_e);});
-	remEvent(_canvasDOM, "mousemove", (_e)=>{this.__hook_mousemove(_e);});
-	remEvent(_canvasDOM, "mousewheel", (_e)=>{this.__hook_mousewheel(_e);});
-};
-*/
-
 Easel.prototype._updateCanvasMeasure = function ()
 {
-	// TODO: Refit for new multi-canvas format
-	if(this.__C_VALID) {
-		var canvasRect = this.__C.getBoundingClientRect();
-		this.__x = canvasRect.left;
-		this.__y = canvasRect.top;
-		this.__w = canvasRect.right - canvasRect.left;
-		this.__h = canvasRect.bottom - canvasRect.top;
-	} else {
+	this.__C_MEASURE.splice(0,this.__C_MEASURE.length);
+
+	if(this.__C.length > 0)
+	{
+		for(var c=0; c<this.__C.length; ++c)
+		{
+			var cRect = this.__C[c].getBoundingClientRect();
+			this.__C_MEASURE[c] = {
+				x: cRect.left, y: cRect.top, w: cRect.right-cRect.left, h: cRect.bottom-cRect.top
+			};
+		}
+		this.__x = this.__C_MEASURE[0].x;
+		this.__y = this.__C_MEASURE[0].y;
+		this.__w = this.__C_MEASURE[0].w;
+		this.__h = this.__C_MEASURE[0].h;
+	}
+	else
+	{
 		this.__x = 0;
 		this.__y = 0;
 		this.__w = 0;
@@ -592,12 +535,105 @@ Easel.prototype._eventKey = function (_event)
 	return {k: eventKey, c: (eventLoc==1?"L":eventLoc==2?"R":"") + eventKey.toUpperCase(), l: eventLoc, s: stateChange};
 };
 
-Easel.prototype.hasFocus = function ()
+Easel.prototype._runOnHooked = function (applyFunc)
 {
-	return (__EASEL_FOCUS === this);
+	for(var c=0; c<this.__C.length; ++c)
+		applyFunc(this, this.__C[c], __EASEL_FOCUS_DOM);
 };
 
-Easel.prototype.giveFocus = function ()
+Easel.prototype._toCanvasDOM = function (param)
+{
+	return UTIL.UNDEF(param) ? null : (
+		UTIL.VALIDCANVAS(param) ? (this.__C.indexOf(param)>=0 ? param : null) :
+		(UTIL.ISINT(param) && this.__C.length>param) ? this.__C[param] :
+		null);
+};
+
+Easel.prototype._fireEvent = function (_type, _params, _rawEvent)
+{
+	var propogateToEasel = true;
+
+	switch(_type)
+	{
+		case Easel.EVENT.NULL: {
+			// You shouldn't ever really fire this, but if you do, egh… nothing will happen!
+		} break;
+		default: {
+			for(var l=0; l<this.__layers.length; ++l) {
+				var widget = this.__layers[l];
+				if(UTIL.INSTIS(widget, EaselWidget))
+					widget._fireEvent(_type, _params, _rawEvent);
+			}
+		} break;
+		case Easel.EVENT.MOUSEDOWN:
+		case Easel.EVENT.MOUSEUP:
+		case Easel.EVENT.MOUSEWHEEL:
+			if()
+		case Easel.EVENT.CLICK:
+		case Easel.EVENT.CONTEXT:
+
+		case Easel.EVENT.MOUSEMOVE:
+		case Easel.EVENT.KEYDOWN: {
+
+		} break;
+		case Easel.EVENT.KEYUP: {
+
+		} break;
+		case Easel.EVENT.KEYPRESS: {
+
+		} break;
+		case Easel.EVENT.PREPAINT: {
+
+		} break;
+		case Easel.EVENT.PAINT: {
+
+		} break;
+		case Easel.EVENT.AFTERPAINT: {
+
+		} break;
+		case Easel.EVENT.CUSTOM: {
+
+		} break;
+	}
+
+	if(propogateToEasel && UTIL.KEYIN(_type, this.__events))
+	{
+		for(var e=0; e<this.__events[_type].length; ++e) {
+			try {
+				this.__events[_type][e](_params, _rawEvent);
+			} catch (ex) {
+				LOG_ERR(ex);
+			}
+		}
+	}
+
+	if(this.__layers.length > 0) {
+		var matches = [];
+
+		for(var l=0; l<this.__layers.length; ++l)
+		{
+			var widget = this.__layers[l];
+			if(UTIL.INSTIS(widget, EaselWidget))
+				if(widget._testEvent(widget, _type, _params))
+					matches.push(widget)
+			if)
+			if(UTIL.INSTIS)
+			if(this._testEvent(widget, _type, _params))
+				matches.push(widget);
+			// TODO Add widget event triggering
+		}
+	}
+
+	return LOG_DEV([this.ID() +': '+ (success ? 'Successfully executed' : 'Failed to execute') +' '+  +'events of type '+ UTIL.KEYOF(_type, Easel.EVENT) +" - P:", _params, _rawEvent], success);
+};
+
+Easel.prototype.hasFocus = function (viaCanvas)
+{
+	return __EASEL_FOCUS === this &&
+		(UTIL.UNDEF(viaCanvas) ? true : __EASEL_FOCUS_DOM === this._toCanvasDOM(viaCanvas));
+};
+
+Easel.prototype.giveFocus = function (viaCanvas)
 {
 	if(!this.hasFocus()) {
 		if(UTIL.INSTIS(__EASEL_FOCUS, Easel))
@@ -605,7 +641,11 @@ Easel.prototype.giveFocus = function ()
 		LOG_DEV(this.ID() +" GIVEN FOCUS");
 	}
 	__EASEL_FOCUS = this;
-	this.__C.style.borderColor = "#eaa";
+	__EASEL_FOCUS_DOM = this._toCanvasDOM(viaCanvas);
+
+	this._runOnHooked(function(easel, self, source){
+		self.style.borderColor = (self==source ? "#eaa" : "#eda");
+	});
 };
 
 Easel.prototype.takeFocus = function ()
@@ -613,8 +653,11 @@ Easel.prototype.takeFocus = function ()
 	if(this.hasFocus()) {
 		LOG_DEV(this.ID() +" LOSES FOCUS");
 		__EASEL_FOCUS = null;
+		__EASEL_FOCUS_DOM = null;
 	}
-	this.__C.style.borderColor = "#ccc";
+	this._runOnHooked(function(easel, self, source){
+		self.style.borderColor = "#ccc";
+	});
 };
 
 Easel.prototype.__hook_default = function ()
@@ -631,16 +674,14 @@ Easel.prototype.__hook_load = function (_event)
 
 Easel.prototype.__hook_click = function (_event)
 {
-	var ePos = this._eventPos(_event);
-	var eButton = _event.button;
-	this.__hook_default("click       # "+ eButton +" @ "+ ePos.x +","+ ePos.y);
+	var eMouse = this._eventMouse(_event);
+	this.__hook_default("click       # "+ eMouse.b +" @ "+ eMouse.x +","+ eMouse.y);
 };
 
 Easel.prototype.__hook_context = function (_event)
 {
-	var ePos = this._eventPos(_event);
-	var eButton = _event.button;
-	this.__hook_default("contextmenu @ "+ ePos.x +","+ ePos.y);
+	var eMouse = this._eventMouse(_event);
+	this.__hook_default("contextmenu # "+ eMouse.b +" @ "+ eMouse.x +","+ eMouse.y);
 };
 
 Easel.prototype.__hook_mousedown = function (_event)
@@ -655,8 +696,8 @@ Easel.prototype.__hook_mouseup = function (_event)
 	var eMouse = this._eventMouse(_event);
 	__EASEL_MOUSEUP_IN = this;
 	if(__EASEL_MOUSEDOWN_IN === this)
-		this.giveFocus();
-	this.__hook_default("mouseup     # "+ eMouse.b +" @ "+ eMouse.x +","+ eMouse.y);
+		this.giveFocus(_event.target);
+	this._fireEvents(Easel.EVENT.MOUSEUP, eMouse, _event);
 };
 
 Easel.prototype.__hook_mousemove = function (_event)
@@ -704,6 +745,44 @@ Easel.prototype.clear = function ()
 
 
 /*
+	Easel Event Object
+
+
+*/
+
+var EaselEvent = function (_type, _function, _propogate, _reqFocus, _reqHover)
+{
+	// TODO EaselEvent object
+	this.type = UTIL.DEF(_type) ? _type : EaselEvent.TYPE.NULL;
+	this.func = UTIL.FUNC(_function) ? _function : ()=>{};
+	this.prop = UTIL.DEF(_propogate) ? _propogate==true : true;
+	this.reqF = UTIL.DEV(_reqFocus) ? _reqFocus==true : false;
+	this.reqC = UTIL.DEV(_reqHover) ? _reqHover==true : false;
+}
+
+EaselEvent.TYPE = Object.freeze({
+	// No event
+	NULL: 0x0,
+	// DOM events
+	LOAD: 0x1, UNLOAD: 0x2,
+	// Object events
+	CREATE: 0x3, DESTROY: 0x4, SHOW: 0x5, HIDE: 0x6,
+	// Mouse events
+	MOUSEMOVE: 0x10, MOUSEDOWN: 0x11, MOUSEUP: 0x12, MOUSEWHEEL: 0x13,
+	// Specialised Mouse events
+	CLICK: 0x1a, CONTEXT: 0x1b,
+	// Key events
+	KEYDOWN: 0x20, KEYUP: 0x21,
+	// Specialised Key events
+	KEYPRESS: 0x2a,
+	// Render / Paint events
+	PREPAINT: 0x30, PAINT: 0x31, AFTERPAINT: 0x32,
+	// Custom events after this point
+	CUSTOM: 0x40
+});
+
+
+/*
 	Easel Widget Object
 
 	// Create an Easel Widget
@@ -744,11 +823,6 @@ var EaselWidget = function ()
 	}
 }
 
-EaselWidget.EVENT = {
-
-};
-Object.freeze(EaselWidget.EVENT);
-
 EaselWidget.prototype.__copyFrom = function () {
 	for(var a=0; a<arguments.length; ++a)
 	{
@@ -756,7 +830,7 @@ EaselWidget.prototype.__copyFrom = function () {
 		argKeys = Object.keys(_arg);
 		for(var k in argKeys)
 		{
-			if(UTIL.INDICT(k, this))
+			if(UTIL.KEYIN(k, this))
 				this[k] = _arg[k];
 			// TODO: Improve this to clone object-type properties
 		}

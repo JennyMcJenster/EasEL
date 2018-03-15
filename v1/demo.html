@@ -13,14 +13,14 @@
 	</style>
 </head>
 <body>
-	<canvas id="canvas1" width="400" height="300"></canvas><br/>
+	<canvas id="canvas1" width="400" height="240"></canvas><br/>
 	<canvas id="canvas2" width="400" height="100"></canvas><br/><br/>
-	<canvas id="canvas3Copy1" width="300" height="200"></canvas>
-	<canvas id="canvas3Copy2" width="300" height="200"></canvas><br/>
-	<canvas id="canvas3Stretch" width="600" height="160"></canvas><br/>
-	<canvas id="canvas3Fill" width="600" height="160"></canvas><br/>
-	<canvas id="canvas3Fit" width="600" height="160"></canvas><br/>
-	<canvas id="canvas3Port" width="600" height="160"></canvas>
+	<canvas id="canvas3Copy1" width="200" height="150"></canvas>
+	<canvas id="canvas3Copy2" width="200" height="150"></canvas><br/>
+	<canvas id="canvas3Stretch" width="400" height="150"></canvas><br/>
+	<canvas id="canvas3Fill" width="400" height="150"></canvas><br/>
+	<canvas id="canvas3Fit" width="300" height="150"></canvas>
+	<canvas id="canvas3Port" width="100" height="150"></canvas>
 
 	<script type="text/javascript">
 		// Create new regular Easels for general event demos
@@ -32,9 +32,9 @@
 		// Attach a third in stretch mode
 		easelC.attachCanvas(document.getElementById("canvas3Stretch"), Easel.DISPLAY.STRETCH);
 		// Attach a third in fill mode
-		easelC.attachCanvas(document.getElementById("canvas3Stretch"), Easel.DISPLAY.FILL);
+		easelC.attachCanvas(document.getElementById("canvas3Fill"), Easel.DISPLAY.FILL);
 		// Attach a third in fit mode
-		easelC.attachCanvas(document.getElementById("canvas3Stretch"), Easel.DISPLAY.FIT);
+		easelC.attachCanvas(document.getElementById("canvas3Fit"), Easel.DISPLAY.FIT);
 		// Attach a fourth in viewport mode (clipped to a specific area)
 		easelC.attachCanvas(document.getElementById("canvas3Port"), Easel.DISPLAY.VIEWPORT);
 
