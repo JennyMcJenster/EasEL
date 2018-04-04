@@ -555,47 +555,6 @@ Easel.prototype._fireEvent = function (_type, _params, _rawEvent)
 
 	switch(_type)
 	{
-		case Easel.EVENT.NULL: {
-			// You shouldn't ever really fire this, but if you do, egh… nothing will happen!
-		} break;
-		default: {
-			for(var l=0; l<this.__layers.length; ++l) {
-				var widget = this.__layers[l];
-				if(UTIL.INSTIS(widget, EaselWidget))
-					widget._fireEvent(_type, _params, _rawEvent);
-			}
-		} break;
-		case Easel.EVENT.MOUSEDOWN:
-		case Easel.EVENT.MOUSEUP:
-		case Easel.EVENT.MOUSEWHEEL:
-			if()
-		case Easel.EVENT.CLICK:
-		case Easel.EVENT.CONTEXT:
-
-		case Easel.EVENT.MOUSEMOVE:
-		case Easel.EVENT.KEYDOWN: {
-
-		} break;
-		case Easel.EVENT.KEYUP: {
-
-		} break;
-		case Easel.EVENT.KEYPRESS: {
-
-		} break;
-		case Easel.EVENT.PREPAINT: {
-
-		} break;
-		case Easel.EVENT.PAINT: {
-
-		} break;
-		case Easel.EVENT.AFTERPAINT: {
-
-		} break;
-		case Easel.EVENT.CUSTOM: {
-
-		} break;
-	}
-
 	if(propogateToEasel && UTIL.KEYIN(_type, this.__events))
 	{
 		for(var e=0; e<this.__events[_type].length; ++e) {
@@ -817,13 +776,13 @@ var EaselWidget = function ()
 	{
 		var _arg = arguments[a];
 		if(UTIL.OBJ(_arg))
-			this.__copyFrom(_arg);
+			this._copyFrom(_arg);
 		else
 			LOG_ERR("Cannot copy non-object properties");
 	}
 }
 
-EaselWidget.prototype.__copyFrom = function () {
+EaselWidget.prototype._copyFrom = function () {
 	for(var a=0; a<arguments.length; ++a)
 	{
 		var _arg = arguments[a];
