@@ -4,7 +4,7 @@
 <head>
 	<title>EasEL Example - Basic Interactive Canvas</title>
 	<meta charset="utf-8" />
-	<script type="text/javascript" src="./asset/script/jquery-3.3.1.min.js"></script>
+	<!--script type="text/javascript" src="./asset/script/jquery-3.3.1.min.js"></script-->
 	<script type="text/javascript" src="./asset/script/easel.js"></script>
 	<style type="text/css">
 		canvas {
@@ -13,22 +13,32 @@
 	</style>
 </head>
 <body>
-	<canvas id="canvas1" width="640" height="480"></canvas><br/>
-	<canvas id="canvas2" width="640" height="160"></canvas><br/><br/>
-	<canvas id="canvas3Copy1" width="300" height="200"></canvas>
-	<canvas id="canvas3Copy2" width="300" height="200"></canvas><br/>
-	<canvas id="canvas3Stretch" width="600" height="160"></canvas><br/>
-	<canvas id="canvas3Port" width="600" height="160"></canvas>
+	<canvas id="canvas1" width="400" height="240"></canvas><br/>
+	<canvas id="canvas2" width="400" height="100"></canvas><br/><br/>
+	<canvas id="canvas3Copy1" width="200" height="150"></canvas>
+	<canvas id="canvas3Copy2" width="200" height="150"></canvas><br/>
+	<canvas id="canvas3Stretch" width="400" height="150"></canvas><br/>
+	<canvas id="canvas3Fill" width="400" height="150"></canvas><br/>
+	<canvas id="canvas3Fit" width="300" height="150"></canvas>
+	<canvas id="canvas3Port" width="100" height="150"></canvas>
 
 	<script type="text/javascript">
-		// Create new regular Easels
+		// Create new regular Easels for general event demos
 		var easelA = new Easel(document.getElementById("canvas1"));
 		var easelB = new Easel(document.getElementById("canvas2"));
-		// Duplicate an easel to multiple canvases
-		var easelC = new Easel(document.getElementById("canvas3Copy1"), document.getElementById("canvas3Copy2"));
 
-		easelC.attachCanvas(document.getElementById("canvas3Stretch"));
-		easelC.attachCanvas(document.getElementById("canvas3Port"), Easel.CLONEMODE.VIEWPORT);
+		// Create a new Easel to attach to multiple canvases; attach a second one inline
+		var easelC = new Easel(document.getElementById("canvas3Copy1"), document.getElementById("canvas3Copy2"));
+		// Attach a third in stretch mode
+		easelC.attachCanvas(document.getElementById("canvas3Stretch"), Easel.DISPLAY.STRETCH);
+		// Attach a third in fill mode
+		easelC.attachCanvas(document.getElementById("canvas3Fill"), Easel.DISPLAY.FILL);
+		// Attach a third in fit mode
+		easelC.attachCanvas(document.getElementById("canvas3Fit"), Easel.DISPLAY.FIT);
+		// Attach a fourth in viewport mode (clipped to a specific area)
+		easelC.attachCanvas(document.getElementById("canvas3Port"), Easel.DISPLAY.VIEWPORT);
+
+
 		/*var zoneTemplate_style = new EaselZone("stylezone", {
 			style: {backgroundColor: "#e88", borderColor: ["#0c0","#0c0"]},
 			x: 0.1, y: 0.1, w: 0.3, h: 0.1
